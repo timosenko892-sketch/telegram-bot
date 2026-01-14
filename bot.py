@@ -1,24 +1,26 @@
-import logging
+ import logging
+import os
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-API_TOKEN = "8494561103:AAFGnUkQmIKHNuKbX0nxXqZvgq3ppGijcbk"
+# ===== ТОКЕН БОТА (БЕРЕТСЯ ИЗ ПЕРЕМЕННЫХ ОКРУЖЕНИЯ) =====
+API_TOKEN = os.getenv("API_TOKEN", "8494561103:AAFGnUkQmIKHNuKbX0nxXqZvgq3ppGijcbk")
 
-# ===== ЮKASSA (ВСТАВИШЬ ПОТОМ) =====
-PAYMENT_PROVIDER_TOKEN = "PASTE_YOOKASSA_TOKEN_HERE"
+# ===== ЮKASSA (ПОКА НЕ АКТИВЕН) =====
+PAYMENT_PROVIDER_TOKEN = os.getenv("PAYMENT_PROVIDER_TOKEN", "")  # Оставь пустым
 PRICE = 99900  # 999 руб
 
 # ===== ССЫЛКИ (МЕНЯЕШЬ САМА) =====
 CHANNEL_LINK = "https://t.me/personalcode3"
 
 VIDEO_LINKS = {
-    1: "VIDEO_LINK_VECTOR_1",
-    2: "VIDEO_LINK_VECTOR_2",
-    3: "VIDEO_LINK_VECTOR_3",
-    4: "VIDEO_LINK_VECTOR_4",
+    1: "https://example.com/video1",  # Замени на реальные ссылки
+    2: "https://example.com/video2",
+    3: "https://example.com/video3",
+    4: "https://example.com/video4",
 }
 
-GUIDE_PDF = "LINK_TO_PDF"
+GUIDE_PDF = "https://example.com/guide.pdf"  # Замени на реальную ссылку
 
 logging.basicConfig(level=logging.INFO)
 
@@ -85,19 +87,27 @@ async def show_result(call):
         4: "🌍 Твой вектор — СВОБОДА И ПОТОК..."
     }
 
-    kb = InlineKeyboardMarkup().add(
-        InlineKeyboardButton("📺 Смотреть видео", url=VIDEO_LINKS[vector]),
-        InlineKeyboardButton("💎 Забрать гайд", callback_data="buy")
-    )
+    # Если токен оплаты есть — показываем кнопку "Забрать гайд"
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton("📺 Смотреть видео", url=VIDEO_LINKS[vector]))
+    
+    if PAYMENT_PROVIDER_TOKEN:
+        kb.add(InlineKeyboardButton("💎 Забрать гайд", callback_data="buy"))
+    else:
+        kb.add(InlineKeyboardButton("📥 Гайд (скоро)", callback_data="no_payment"))
 
     await call.message.answer(
         texts[vector],
         reply_markup=kb
     )
 
-# ===== ОПЛАТА =====
+# ===== ОПЛАТА (РАБОТАЕТ ТОЛЬКО ЕСЛИ ЕСТЬ ТОКЕН) =====
 @dp.callback_query_handler(lambda c: c.data == "buy")
 async def buy(call: types.CallbackQuery):
+    if not PAYMENT_PROVIDER_TOKEN:
+        await call.answer("Оплата временно недоступна", show_alert=True)
+        return
+    
     prices = [types.LabeledPrice(label="Гайд Магнит для денег", amount=PRICE)]
     await bot.send_invoice(
         call.from_user.id,
@@ -119,6 +129,11 @@ async def success(message: types.Message):
         InlineKeyboardButton("📥 Скачать гайд", url=GUIDE_PDF)
     )
     await message.answer("Оплата принята! 🎉", reply_markup=kb)
+
+# ===== ЗАГЛУШКА ДЛЯ КНОПКИ ГАЙДА =====
+@dp.callback_query_handler(lambda c: c.data == "no_payment")
+async def no_payment(call: types.CallbackQuery):
+    await call.answer("Гайд скоро будет доступен! 🔜", show_alert=True)
 
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True)
