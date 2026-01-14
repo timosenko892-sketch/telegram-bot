@@ -3,93 +3,33 @@ import os
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-logging.basicConfig(level=logging.INFO)
-
-# ===== ТОКЕН БОТА =====
+# ===== НАСТРОЙКИ =====
 API_TOKEN = os.getenv("API_TOKEN")
-if not API_TOKEN:
-    raise ValueError("API_TOKEN не задан")
+
+logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
-# ===== ССЫЛКИ =====
-CHANNEL_LINK = "https://t.me/personalcode3"
-
-VIDEO_LINKS = {
-    1: "VIDEO_LINK_VECTOR_1",
-    2: "VIDEO_LINK_VECTOR_2",
-    3: "VIDEO_LINK_VECTOR_3",
-    4: "VIDEO_LINK_VECTOR_4",
-}
-
-user_answers = {}
-
-# ===== СТАРТ =====
+# ===== /start =====
 @dp.message_handler(commands=["start"])
 async def start(message: types.Message):
-    kb = InlineKeyboardMarkup().add(
-        InlineKeyboardButton("🚀 УЗНАТЬ СВОЙ АРХЕТИП", callback_data="q1")
-    )
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton("🚀 Начать тест", callback_data="start_test"))
+
     await message.answer(
-        "Привет! 👋\n\nХочешь узнать свой денежный вектор?\n\nОтветь на 6 вопросов 👇",
+        "Привет 👋\n\nЭто тестовый бот.\nНажми кнопку ниже 👇",
         reply_markup=kb
     )
 
-# ===== ВОПРОСЫ =====
-QUESTIONS = {
-    "q1": "Что тебя больше всего мотивирует?",
-    "q2": "Как тебе комфортнее работать?",
-    "q3": "Как ты относишься к риску?",
-    "q4": "Что для тебя главное в деньгах?",
-    "q5": "Как реагируешь на препятствия?",
-    "q6": "Какой доход тебе ближе?",
-}
+# ===== КНОПКА =====
+@dp.callback_query_handler(lambda c: c.data == "start_test")
+async def start_test(call: types.CallbackQuery):
+    await call.message.answer(
+        "✅ Бот работает корректно.\n\nСледующий шаг — добавить твою воронку."
+    )
+    await call.answer()
 
-NEXT_Q = {
-    "q1": "q2",
-    "q2": "q3",
-    "q3": "q4",
-    "q4": "q5",
-    "q5": "q6",
-}
-
-def answer_kb(q):
-    kb = InlineKeyboardMarkup()
-    for i in range(1, 5):
-        kb.add(InlineKeyboardButton(str(i), callback_data=f"{q}_{i}"))
-    return kb
-
-@dp.callback_query_handler(lambda c: c.data.startswith("q"))
-async def process_answers(call: types.CallbackQuery):
-    q, ans = call.data.split("_")
-    user_answers.setdefault(call.from_user.id, []).append(int(ans))
-
-    if q != "q6":
-        await call.message.edit_text(
-            QUESTIONS[NEXT_Q[q]],
-            reply_markup=answer_kb(NEXT_Q[q])
-        )
-    else:
-        await show_result(call)
-
-# ===== РЕЗУЛЬТАТ =====
-async def show_result(call):
-    answers = user_answers[call.from_user.id]
-    vector = max(set(answers), key=answers.count)
-
-    texts = {
-        1: "💥 Твой вектор — ДЕЙСТВИЕ И ЛИДЕРСТВО",
-        2: "🎨 Твой вектор — ТВОРЧЕСТВО И ВДОХНОВЕНИЕ",
-        3: "📊 Твой вектор — СИСТЕМА И ЭКСПЕРТНОСТЬ",
-        4: "🌍 Твой вектор — СВОБОДА И ПОТОК",
-    }
-
-    kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton("📺 Смотреть видео", url=VIDEO_LINKS[vector]))
-    kb.add(InlineKeyboardButton("📲 Перейти в канал", url=CHANNEL_LINK))
-
-    await call.message.answer(texts[vector], reply_markup=kb)
-
+# ===== ЗАПУСК =====
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True)
