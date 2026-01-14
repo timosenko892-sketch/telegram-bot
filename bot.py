@@ -1,13 +1,12 @@
-import logging
 import os
-from aiogram import Bot, Dispatcher, executor, types
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, CallbackContext
 
-# Токен бота (из переменных окружения или напрямую)
+# Токен бота
 API_TOKEN = os.getenv("API_TOKEN", "8494561103:AAFGnUkQmIKHNuKbX0nxXqZvgq3ppGijcbk")
 
-# Ссылки (замени на реальные позже)
-CHANNEL_LINK = "https://t.me/personalcode3"
+# Ссылки
 VIDEO_LINKS = {
     1: "https://example.com/video1",
     2: "https://example.com/video2",
@@ -16,19 +15,14 @@ VIDEO_LINKS = {
 }
 
 logging.basicConfig(level=logging.INFO)
-bot = Bot(token=API_TOKEN)
-dp = Dispatcher(bot)
 user_answers = {}
 
 # ===== СТАРТ =====
-@dp.message_handler(commands=["start"])
-async def start(message: types.Message):
-    kb = InlineKeyboardMarkup().add(
-        InlineKeyboardButton("🚀 УЗНАТЬ СВОЙ АРХЕТИП", callback_data="q1")
-    )
-    await message.answer(
+async def start(update: Update, context: CallbackContext):
+    kb = [[InlineKeyboardButton("🚀 УЗНАТЬ СВОЙ АРХЕТИП", callback_data="q1")]]
+    await update.message.reply_text(
         "Привет! 👋\n\nХочешь узнать свой денежный магнит?\n\n6 вопросов — и твой код раскроется.",
-        reply_markup=kb
+        reply_markup=InlineKeyboardMarkup(kb)
     )
 
 # ===== ВОПРОСЫ =====
@@ -47,28 +41,31 @@ NEXT_Q = {
 }
 
 def answer_kb(q):
-    kb = InlineKeyboardMarkup()
+    kb = []
     for i in range(1, 5):
-        kb.add(InlineKeyboardButton(str(i), callback_data=f"{q}_{i}"))
-    return kb
+        kb.append([InlineKeyboardButton(str(i), callback_data=f"{q}_{i}")])
+    return InlineKeyboardMarkup(kb)
 
-@dp.callback_query_handler(lambda c: c.data.startswith("q"))
-async def process_answers(call: types.CallbackQuery):
-    q, ans = call.data.split("_")
-    user_answers.setdefault(call.from_user.id, []).append(int(ans))
+# ===== ОБРАБОТКА ОТВЕТОВ =====
+async def process_answers(update: Update, context: CallbackContext):
+    query = update.callback_query
+    await query.answer()
+    q, ans = query.data.split("_")
+    user_id = query.from_user.id
+    user_answers.setdefault(user_id, []).append(int(ans))
 
     if q != "q6":
         next_q = NEXT_Q[q]
-        await call.message.edit_text(
+        await query.edit_message_text(
             QUESTIONS[next_q],
             reply_markup=answer_kb(next_q)
         )
     else:
-        await show_result(call)
+        await show_result(query)
 
 # ===== РЕЗУЛЬТАТ =====
-async def show_result(call):
-    answers = user_answers[call.from_user.id]
+async def show_result(query):
+    answers = user_answers[query.from_user.id]
     vector = max(set(answers), key=answers.count)
 
     texts = {
@@ -78,19 +75,28 @@ async def show_result(call):
         4: "🌍 Твой вектор — СВОБОДА И ПОТОК..."
     }
 
-    kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton("📺 Смотреть видео", url=VIDEO_LINKS[vector]))
-    kb.add(InlineKeyboardButton("📥 Получить гайд (скоро)", callback_data="soon"))
+    kb = [
+        [InlineKeyboardButton("📺 Смотреть видео", url=VIDEO_LINKS[vector])],
+        [InlineKeyboardButton("📥 Получить гайд (скоро)", callback_data="soon")]
+    ]
 
-    await call.message.answer(
+    await query.edit_message_text(
         texts[vector],
-        reply_markup=kb
+        reply_markup=InlineKeyboardMarkup(kb)
     )
 
-# ===== ЗАГЛУШКА ДЛЯ ГАЙДА =====
-@dp.callback_query_handler(lambda c: c.data == "soon")
-async def soon(call: types.CallbackQuery):
-    await call.answer("Гайд будет доступен в ближайшее время! 🔜", show_alert=True)
+# ===== ЗАГЛУШКА =====
+async def soon(update: Update, context: CallbackContext):
+    query = update.callback_query
+    await query.answer("Гайд будет доступен в ближайшее время! 🔜", show_alert=True)
+
+# ===== ЗАПУСК =====
+def main():
+    app = Application.builder().token(API_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(process_answers, pattern="^q"))
+    app.add_handler(CallbackQueryHandler(soon, pattern="^soon$"))
+    app.run_polling()
 
 if __name__ == "__main__":
-    executor.start_polling(dp, skip_updates=True)
+    main()
